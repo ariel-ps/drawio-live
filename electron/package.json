@@ -8,7 +8,8 @@
     "check": "node --check main.js && node --check preload.js && node --check renderer.js",
     "smoke": "electron . --smoke-test",
     "setup:drawio": "python3 ../skills/drawio-live/scripts/setup.py --no-run",
-    "start": "electron ."
+    "start": "electron .",
+    "test": "npm run check && npm run smoke"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",

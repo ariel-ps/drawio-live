@@ -14,11 +14,11 @@ an already-running server on the target port instead of starting a second one.
 """
 import argparse
 import os
+import platform
 import subprocess
 import sys
 import time
 import urllib.request
-import webbrowser
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PATCH_FILE = os.path.join(SCRIPT_DIR, "app_js.patch")
@@ -34,6 +34,27 @@ def run(cmd, **kwargs):
 def server_already_running(port):
     try:
         urllib.request.urlopen(f"http://127.0.0.1:{port}/index.html", timeout=1)
+        return True
+    except Exception:
+        return False
+
+
+def open_browser(url):
+    """Launch the OS default browser with fully suppressed stdio, so a
+    failing browser (e.g. Chrome's Linux sandbox needing unprivileged user
+    namespaces - common in containers/VMs/hardened kernels, exit EPERM) can't
+    dump noise into this script's output and make a successful setup look
+    like it crashed. The server is already up regardless of whether this
+    succeeds - see the fallback message printed unconditionally below.
+    """
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        elif system == "Windows":
+            os.startfile(url)  # noqa: no subprocess/stdio involved on Windows
+        else:
+            subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         return True
     except Exception:
         return False
@@ -91,8 +112,14 @@ def main():
                 break
             time.sleep(0.1)
 
-    print(f"opening {url}")
-    webbrowser.open(url)
+    launched = open_browser(url)
+    print()
+    print(f"Server is running at: {url}")
+    if launched:
+        print("(attempted to open it in your default browser - if nothing appeared, e.g. a")
+        print(" sandboxed/headless environment, just open the URL above manually)")
+    else:
+        print("(could not auto-launch a browser on this system - open the URL above manually)")
 
 
 if __name__ == "__main__":
