@@ -32,6 +32,22 @@ _cond = threading.Condition()
 _state = {"xml": None}
 _queue = []
 _results = {}
+_revision = {"value": 0, "page": None}
+_poll = {"waiting": 0, "last_at": None}
+
+CAPABILITIES = {
+    "protocolVersion": "1.0",
+    "commands": [
+        "action", "listActions", "eval", "listPages", "renamePage", "removePage",
+        "setCurrentPage", "getFullDocument", "loadFullDocument", "saveDiagram",
+        "setDocumentTitle", "insertVertex", "insertEdge", "deleteCells", "setStyle",
+        "setFullStyle", "setValue", "setGeometry", "group", "ungroup", "getSelection",
+        "setSelection", "getStyle", "load", "undo", "redo", "canUndo", "canRedo",
+        "exportSvg", "exportPng", "checkOverlaps", "runLayout", "setEdgeLabelPosition",
+        "autoFixOverlaps", "batch", "describeGraph", "transaction",
+        "getCapabilities", "health", "waitForChange",
+    ],
+}
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -92,17 +108,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         if self.path == "/api/poll":
-            deadline = time.time() + POLL_TIMEOUT
             with _cond:
-                while not _queue:
-                    remaining = deadline - time.time()
-                    if remaining <= 0:
-                        self.send_response(204)
-                        self.end_headers()
-                        return
-                    _cond.wait(timeout=remaining)
-                cmd = _queue.pop(0)
-            self._send_json(200, cmd)
+                _poll["last_at"] = time.time()
+                _poll["waiting"] += 1
+            try:
+                deadline = time.time() + POLL_TIMEOUT
+                with _cond:
+                    while not _queue:
+                        remaining = deadline - time.time()
+                        if remaining <= 0:
+                            self.send_response(204)
+                            self.end_headers()
+                            return
+                        _cond.wait(timeout=remaining)
+                    cmd = _queue.pop(0)
+                self._send_json(200, cmd)
+            finally:
+                with _cond:
+                    _poll["waiting"] -= 1
             return
 
         super().do_GET()
@@ -130,8 +153,57 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        if self.path == "/api/revision":
+            payload = self._read_json()
+            with _cond:
+                _revision["value"] = payload.get("revision", _revision["value"])
+                _revision["page"] = payload.get("page")
+                _cond.notify_all()
+            self.send_response(204)
+            self.end_headers()
+            return
+
         if self.path == "/api/command":
             payload = self._read_json()
+            cmd_type = payload.get("type")
+
+            # health/waitForChange/getCapabilities are answered entirely
+            # server-side - never queued to the browser - so they still work
+            # when the browser's poll loop is stuck (that's their whole point).
+            if cmd_type == "getCapabilities":
+                self._send_json(200, {"ok": True, "result": CAPABILITIES})
+                return
+
+            if cmd_type == "health":
+                with _cond:
+                    last_at = _poll["last_at"]
+                    health = {
+                        "browserConnected": _poll["waiting"] > 0,
+                        "lastPolledSecondsAgo": (time.time() - last_at) if last_at else None,
+                        "activePage": _revision["page"],
+                        "revision": _revision["value"],
+                        "queueDepth": len(_queue),
+                    }
+                self._send_json(200, {"ok": True, "result": health})
+                return
+
+            if cmd_type == "waitForChange":
+                after = payload.get("afterRevision", -1)
+                deadline = time.time() + COMMAND_TIMEOUT
+                with _cond:
+                    while _revision["value"] <= after:
+                        remaining = deadline - time.time()
+                        if remaining <= 0:
+                            self._send_json(200, {"ok": True, "result": {
+                                "timedOut": True, "revision": _revision["value"], "page": _revision["page"],
+                            }})
+                            return
+                        _cond.wait(timeout=remaining)
+                    self._send_json(200, {"ok": True, "result": {
+                        "timedOut": False, "revision": _revision["value"], "page": _revision["page"],
+                    }})
+                return
+
             cmd_id = uuid.uuid4().hex
             payload["_requestId"] = cmd_id
 

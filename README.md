@@ -28,12 +28,35 @@ no UI automation, no CDP.
 
 ## Quickstart
 
+Don't even have the repo yet — one line:
+
 ```bash
-pip install --user nothing   # stdlib only, nothing to install
-python3 skills/drawio-live/scripts/setup.py            # clones draw.io + applies the patch
-DRAWIO_WEBAPP_DIR=~/drawio-live-instance/src/main/webapp \
-  python3 skills/drawio-live/scripts/state_server.py &
-open "http://127.0.0.1:8089/?dev=1"                    # dev=1 is required for the patch to load
+curl -fsSL https://raw.githubusercontent.com/ariel-ps/drawio-live/main/bootstrap.sh | bash
+```
+
+(Clones this repo to `~/drawio-live`, then does everything below. Set
+`DRAWIO_LIVE_DIR` to clone somewhere else. As with any `curl | bash`, feel
+free to read [`bootstrap.sh`](bootstrap.sh) first — it's 12 lines.)
+
+Already have the repo cloned — one command, clones draw.io, applies the
+patch, starts the relay, opens your browser:
+
+```bash
+python3 skills/drawio-live/scripts/setup.py
+```
+
+Re-running it is safe (skips the clone/patch if already done, reuses an
+already-running server). `--no-run` stops after clone+patch and just prints
+the manual start command, if you'd rather control that yourself.
+
+To also get a permanent `drawio-debug` command on your PATH and register the
+skill with Claude Code (or any [Agent Skills](https://agentskills.io)-compatible
+host) in one step:
+
+```bash
+./install.sh            # symlinks skills/drawio-live into ~/.claude/skills
+                         # and skills/drawio-live/scripts/drawio-debug into ~/.local/bin
+drawio-debug             # same as setup.py, callable from anywhere afterward
 ```
 
 Then from anywhere:

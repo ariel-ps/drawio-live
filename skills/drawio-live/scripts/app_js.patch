@@ -1,8 +1,8 @@
 diff --git a/src/main/webapp/js/diagramly/App.js b/src/main/webapp/js/diagramly/App.js
-index e1e9dd7..1335b78 100644
+index e1e9dd7..377e983 100644
 --- a/src/main/webapp/js/diagramly/App.js
 +++ b/src/main/webapp/js/diagramly/App.js
-@@ -1455,6 +1455,393 @@ App.main = function(callback, createUi)
+@@ -1455,6 +1455,477 @@ App.main = function(callback, createUi)
  						var ui = (createUi != null) ? createUi() : new App(new Editor(
  								urlParams['chrome'] == '0' || uiTheme == 'min',
  								null, null, null, urlParams['chrome'] != '0'));
@@ -12,6 +12,14 @@ index e1e9dd7..1335b78 100644
 +						{
 +							var graph = ui.editor != null ? ui.editor.graph : null;
 +							if (graph == null) return;
++
++							window.__drawioRevision = window.__drawioRevision || 0;
++
++							function currentPageInfo()
++							{
++								var idx = ui.pages ? mxUtils.indexOf(ui.pages, ui.currentPage) : 0;
++								return {index: idx, name: ui.currentPage ? ui.currentPage.getName() : null};
++							}
 +
 +							function pushState()
 +							{
@@ -27,8 +35,25 @@ index e1e9dd7..1335b78 100644
 +								catch (e) {}
 +							}
 +
++							function pushRevision()
++							{
++								window.__drawioRevision++;
++								try
++								{
++									fetch('/api/revision',
++									{
++										method: 'POST',
++										headers: {'Content-Type': 'application/json'},
++										body: JSON.stringify({revision: window.__drawioRevision, page: currentPageInfo()})
++									});
++								}
++								catch (e) {}
++							}
++
 +							graph.getModel().addListener(mxEvent.CHANGE, pushState);
++							graph.getModel().addListener(mxEvent.CHANGE, pushRevision);
 +							pushState();
++							pushRevision();
 +
 +							function cellsByIds(ids)
 +							{
@@ -110,6 +135,65 @@ index e1e9dd7..1335b78 100644
 +											}
 +
 +											return {result: results};
++										})();
++									case 'describeGraph':
++										var dgModel = graph.getModel();
++										var dgCells = [];
++
++										for (var dgId in dgModel.cells)
++										{
++											var dgCell = dgModel.cells[dgId];
++											if (dgCell == dgModel.getRoot() || dgCell.getParent() == null) continue;
++											if (dgCell.getParent() == dgModel.getRoot()) continue;
++
++											var dgGeo = dgModel.getGeometry(dgCell);
++											dgCells.push({
++												id: dgCell.id,
++												type: dgModel.isEdge(dgCell) ? 'edge' : 'vertex',
++												value: dgCell.value || null,
++												parentId: dgCell.getParent() ? dgCell.getParent().id : null,
++												source: dgModel.isEdge(dgCell) && dgCell.source ? dgCell.source.id : undefined,
++												target: dgModel.isEdge(dgCell) && dgCell.target ? dgCell.target.id : undefined,
++												geometry: dgGeo ? {x: dgGeo.x, y: dgGeo.y, width: dgGeo.width, height: dgGeo.height} : null,
++												style: dgModel.getStyle(dgCell) || ''
++											});
++										}
++
++										return {result: {
++											revision: window.__drawioRevision,
++											page: currentPageInfo(),
++											cells: dgCells,
++											selection: graph.getSelectionCells().map(function(c) { return c.id; })
++										}};
++									case 'transaction':
++										if (cmd.expectedRevision != null && cmd.expectedRevision !== window.__drawioRevision)
++										{
++											throw new Error('stale revision: expected ' + cmd.expectedRevision + ', current is ' + window.__drawioRevision);
++										}
++
++										return (async function()
++										{
++											var txSnapshot = mxUtils.getXml(ui.editor.getGraphXml());
++											var txResults = [];
++
++											model.beginUpdate();
++											try
++											{
++												for (var i = 0; i < (cmd.commands || []).length; i++)
++												{
++													var r = await executeCommand(cmd.commands[i]);
++													txResults.push(r);
++												}
++											}
++											catch (e)
++											{
++												ui.replaceDiagramData(txSnapshot);
++												model.endUpdate();
++												throw new Error('transaction rolled back: ' + String(e && e.message || e));
++											}
++											model.endUpdate();
++
++											return {result: txResults};
 +										})();
 +									case 'action':
 +										var action = ui.actions.get(cmd.name);

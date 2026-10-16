@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-src http://127.0.0.1:*"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>drawio-live</title>
+    <link rel="stylesheet" href="./node_modules/@xterm/xterm/css/xterm.css">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main>
+      <section class="terminal-pane" aria-label="draw.io command terminal">
+        <header>
+          <span>drawio-live</span>
+          <span id="status" class="starting">starting</span>
+        </header>
+        <div id="terminal"></div>
+      </section>
+      <section class="editor-pane" aria-label="draw.io editor">
+        <iframe id="editor" title="draw.io editor"></iframe>
+        <div id="editor-placeholder">Waiting for draw.io…</div>
+      </section>
+    </main>
+    <script src="./node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="./node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

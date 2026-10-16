@@ -1,0 +1,20 @@
+{
+  "name": "drawio-live-electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal command pane beside a live draw.io canvas",
+  "main": "main.js",
+  "scripts": {
+    "check": "node --check main.js && node --check preload.js && node --check renderer.js",
+    "smoke": "electron . --smoke-test",
+    "setup:drawio": "python3 ../skills/drawio-live/scripts/setup.py --no-run",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0"
+  },
+  "devDependencies": {
+    "electron": "44.8.0"
+  }
+}

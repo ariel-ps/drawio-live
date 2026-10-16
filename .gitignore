@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
 skills/drawio-live/scripts/diagrams/
+electron/node_modules/
 *.log
 .DS_Store

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Thin wrapper: one command to clone+patch (if needed), start the relay
+# server, and open the patched draw.io editor in your browser.
+# Installed on PATH by install.sh. Forwards all args to setup.py, e.g.:
+#   drawio-debug                  # use the default ~/drawio-live-instance
+#   drawio-debug --port 8090      # run on a different port
+#   drawio-debug /some/other/dir  # use a different target clone directory
+set -euo pipefail
+
+# Resolve through symlinks (BSD readlink has no -f, so do it by hand) so this
+# still finds setup.py when invoked via a ~/.local/bin symlink.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+exec python3 "$SCRIPT_DIR/setup.py" "$@"
