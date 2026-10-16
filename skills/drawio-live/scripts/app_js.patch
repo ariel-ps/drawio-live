@@ -1,8 +1,8 @@
 diff --git a/src/main/webapp/js/diagramly/App.js b/src/main/webapp/js/diagramly/App.js
-index e1e9dd7..02a31de 100644
+index e1e9dd7..477b5f7 100644
 --- a/src/main/webapp/js/diagramly/App.js
 +++ b/src/main/webapp/js/diagramly/App.js
-@@ -1455,6 +1455,486 @@ App.main = function(callback, createUi)
+@@ -1455,6 +1455,491 @@ App.main = function(callback, createUi)
  						var ui = (createUi != null) ? createUi() : new App(new Editor(
  								urlParams['chrome'] == '0' || uiTheme == 'min',
  								null, null, null, urlParams['chrome'] != '0'));
@@ -108,7 +108,12 @@ index e1e9dd7..02a31de 100644
 +										var cellA = model.getCell(boxes[i].id);
 +										var cellB = model.getCell(boxes[j].id);
 +										if (model.isAncestor(cellA, cellB) || model.isAncestor(cellB, cellA)) continue;
-+										if (boxes[i].part == 'shape' && boxes[j].part == 'shape' && isEdgeOwnEndpoint(model, cellA, cellB)) continue;
++										if (isEdgeOwnEndpoint(model, cellA, cellB))
++										{
++											var edgeShapeA = model.isEdge(cellA) && boxes[i].part == 'shape';
++											var edgeShapeB = model.isEdge(cellB) && boxes[j].part == 'shape';
++											if (edgeShapeA || edgeShapeB) continue;
++										}
 +										if (boxesIntersect(boxes[i].bounds, boxes[j].bounds))
 +										{
 +											overlaps.push({a: boxes[i].id + ':' + boxes[i].part, b: boxes[j].id + ':' + boxes[j].part});
