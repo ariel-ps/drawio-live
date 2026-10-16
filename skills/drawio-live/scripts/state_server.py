@@ -68,6 +68,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return json.loads(raw) if raw else {}
 
     def do_GET(self):
+        if self.path == "/api/health":
+            self._send_json(200, {"ok": True, "service": "drawio-live"})
+            return
+
         if self.path.startswith("/d/"):
             name = self.path[len("/d/"):]
             self.send_response(302)
