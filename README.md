@@ -49,6 +49,17 @@ Re-running it is safe (skips the clone/patch if already done, reuses an
 already-running server). `--no-run` stops after clone+patch and just prints
 the manual start command, if you'd rather control that yourself.
 
+Stop it the same way:
+
+```bash
+python3 skills/drawio-live/scripts/setup.py down --port 8089
+```
+
+`up` is the default if no subcommand is given, for backward compatibility.
+`down` looks up the PID it recorded when `up` started the server; if that's
+missing (e.g. the server was started some other way), it falls back to
+finding whatever process is actually listening on that port.
+
 To also get a permanent `drawio-debug` command on your PATH and register the
 skill with Claude Code (or any [Agent Skills](https://agentskills.io)-compatible
 host) in one step:

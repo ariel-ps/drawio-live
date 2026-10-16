@@ -32,6 +32,20 @@ background, opens the patched editor in a real browser. Safe to re-run
 wrapper around this same script for a short PATH-installed alias (see the
 repo's `install.sh`).
 
+Stop it with:
+
+```bash
+python3 scripts/setup.py down --port 8089
+```
+
+`up` is implied when no subcommand is given (backward compatible with the
+original invocation). `down` stops the server `up` started: it reads the PID
+recorded in `~/.drawio-live/pids/<port>.pid`, and if that's missing or stale
+(e.g. the server was started some other way), falls back to finding whatever
+process is actually listening on that port (POSIX only, via `lsof -sTCP:LISTEN`
+— the `LISTEN` state filter matters, without it lsof can also match an
+unrelated process with a merely-passing connection on the same port).
+
 `?dev=1` must stay in the URL for the life of the tab — a reload without it
 falls back to the unpatched production bundle. Use a real browser (Chrome,
 etc.), not a terminal-embedded one — the diagram needs to actually render
