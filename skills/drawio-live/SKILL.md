@@ -68,6 +68,7 @@ Every command returns `{"ok": true, "result": ...}` or `{"ok": false, "error": "
 | `deleteCells` | `{ids}` | |
 | `setStyle` | `{ids,key,value}` | changes one style key, leaves the rest of the style string untouched |
 | `setFullStyle` | `{ids,style}` | replaces the whole style string |
+| `setIcon` | `{ids\|id,icon}` | sets a semantic icon shape while preserving fill/stroke colors — `icon` is one of `person`, `process`, `database`, `server`, `interface`, `file`, `route` (each a built-in mxGraph shape, no external stencil loading needed). Re-applying a different icon to the same cell cleans up the previous icon's extra keys (e.g. `size`) rather than leaving them stale. Applies one id at a time with a short yield between each — applying many new shapes within a single update crashed the renderer in testing; this is the fix. Runs `autoFixOverlaps` afterward automatically, since icon shapes with label-outside positioning (`person`) are prone to colliding with a nearby edge label. Returns `{applied, icon, overlapsBeforeIcon, overlapsAfterFix}`. Verified live: applying, re-applying a different icon, an invalid icon name's error message, and a 3-id multi-apply (the exact scenario that crashed the renderer manually) all confirmed working. |
 | `setValue` | `{id,value}` | cell label |
 | `setGeometry` | `{id,x,y,width,height}` | any subset; unset fields keep current value |
 | `group` / `ungroup` | `{ids}` | |

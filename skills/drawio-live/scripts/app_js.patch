@@ -1,8 +1,8 @@
 diff --git a/src/main/webapp/js/diagramly/App.js b/src/main/webapp/js/diagramly/App.js
-index e1e9dd7..477b5f7 100644
+index e1e9dd7..1448281 100644
 --- a/src/main/webapp/js/diagramly/App.js
 +++ b/src/main/webapp/js/diagramly/App.js
-@@ -1455,6 +1455,491 @@ App.main = function(callback, createUi)
+@@ -1455,6 +1455,553 @@ App.main = function(callback, createUi)
  						var ui = (createUi != null) ? createUi() : new App(new Editor(
  								urlParams['chrome'] == '0' || uiTheme == 'min',
  								null, null, null, urlParams['chrome'] != '0'));
@@ -62,6 +62,21 @@ index e1e9dd7..477b5f7 100644
 +									.filter(function(c) { return c != null; });
 +							}
 +
++							// Presets are restricted to shapes individually verified not to break
++							// rendering when applied live (2026-10-16 session). Each key not present
++							// in a preset is explicitly cleared, so re-applying a different icon to an
++							// already-iconified cell doesn't leave stale keys (e.g. 'size') behind.
++							var ICON_MANAGED_KEYS = ['shape', 'verticalLabelPosition', 'verticalAlign', 'size'];
++							var ICON_PRESETS = {
++								person: {shape: 'actor', verticalLabelPosition: 'bottom', verticalAlign: 'top'},
++								process: {shape: 'process', size: '0.12'},
++								database: {shape: 'cylinder'},
++								server: {shape: 'cube', size: '10'},
++								interface: {shape: 'hexagon'},
++								file: {shape: 'note', size: '14'},
++								route: {shape: 'step', size: '14'}
++							};
++
 +							function boxesIntersect(a, b)
 +							{
 +								return !(a.x + a.width < b.x || b.x + b.width < a.x ||
@@ -74,6 +89,85 @@ index e1e9dd7..477b5f7 100644
 +								if (edge == null) return false;
 +								var other = (edge == cellA) ? cellB : cellA;
 +								return model.getTerminal(edge, true) == other || model.getTerminal(edge, false) == other;
++							}
++
++							function autoFixLabelOverlaps(maxRounds)
++							{
++								var model = graph.getModel();
++								maxRounds = maxRounds || 5;
++								var candidateOffsets = [0, 0.3, -0.3, 0.45, -0.45, 0.15, -0.15, 0.6, -0.6];
++
++								function countLabelOverlapsFor(edgeId)
++								{
++									return computeOverlaps().filter(function(o)
++									{
++										return o.a == edgeId + ':label' || o.b == edgeId + ':label';
++									}).length;
++								}
++
++								var roundsRun = 0;
++								var startingOverlaps = computeOverlaps().length;
++
++								for (var round = 0; round < maxRounds; round++)
++								{
++									roundsRun = round + 1;
++									var overlaps = computeOverlaps();
++									var labelOverlaps = overlaps.filter(function(o)
++									{
++										var aid = o.a.split(':'), bid = o.b.split(':');
++										return (aid[1] == 'label' && model.isEdge(model.getCell(aid[0]))) ||
++											(bid[1] == 'label' && model.isEdge(model.getCell(bid[0])));
++									});
++
++									if (labelOverlaps.length === 0) break;
++
++									var edgesToFix = {};
++									labelOverlaps.forEach(function(o)
++									{
++										var aid = o.a.split(':'), bid = o.b.split(':');
++										if (aid[1] == 'label' && model.isEdge(model.getCell(aid[0]))) edgesToFix[aid[0]] = true;
++										if (bid[1] == 'label' && model.isEdge(model.getCell(bid[0]))) edgesToFix[bid[0]] = true;
++									});
++
++									var improved = false;
++
++									Object.keys(edgesToFix).forEach(function(edgeId)
++									{
++										var ec = model.getCell(edgeId);
++										if (ec == null) return;
++
++										var baselineGeo = model.getGeometry(ec).clone();
++										var baselineCount = countLabelOverlapsFor(edgeId);
++										if (baselineCount === 0) return;
++
++										var bestOffset = baselineGeo.x || 0;
++										var bestCount = baselineCount;
++
++										candidateOffsets.forEach(function(offset)
++										{
++											var trial = baselineGeo.clone();
++											trial.x = offset;
++											model.setGeometry(ec, trial);
++											var count = countLabelOverlapsFor(edgeId);
++											if (count < bestCount)
++											{
++												bestCount = count;
++												bestOffset = offset;
++											}
++										});
++
++										var finalGeo = baselineGeo.clone();
++										finalGeo.x = bestOffset;
++										model.setGeometry(ec, finalGeo);
++
++										if (bestCount < baselineCount) improved = true;
++									});
++
++									if (!improved) break;
++								}
++
++								var endingOverlaps = computeOverlaps().length;
++								return {roundsRun: roundsRun, startingOverlaps: startingOverlaps, remainingOverlaps: endingOverlaps};
 +							}
 +
 +							function computeOverlaps()
@@ -258,6 +352,47 @@ index e1e9dd7..477b5f7 100644
 +									case 'setFullStyle':
 +										graph.setCellStyle(cmd.style, cellsByIds(cmd.ids));
 +										return {};
++									case 'setIcon':
++										var iconIds = cmd.ids || (cmd.id != null ? [cmd.id] : []);
++										if (iconIds.length === 0) throw new Error('setIcon requires ids or id');
++										var iconPreset = ICON_PRESETS[cmd.icon];
++										if (iconPreset == null)
++										{
++											throw new Error('unknown icon: ' + cmd.icon + ' (known: ' + Object.keys(ICON_PRESETS).join(', ') + ')');
++										}
++										for (var ii = 0; ii < iconIds.length; ii++)
++										{
++											if (model.getCell(iconIds[ii]) == null) throw new Error('cell not found: ' + iconIds[ii]);
++										}
++
++										return (async function()
++										{
++											var overlapsBeforeIcon = computeOverlaps().length;
++											for (var i = 0; i < iconIds.length; i++)
++											{
++												var iconCell = model.getCell(iconIds[i]);
++												ICON_MANAGED_KEYS.forEach(function(key)
++												{
++													graph.setCellStyles(key, iconPreset[key] != null ? iconPreset[key] : null, [iconCell]);
++												});
++
++												// Applying many new shapes within one update scope crashed the
++												// renderer in testing; yielding between cells (separate undoable
++												// edits, browser gets a chance to settle) avoided it every time.
++												if (i < iconIds.length - 1)
++												{
++													await new Promise(function(resolve) { setTimeout(resolve, 60); });
++												}
++											}
++
++											var fixResult = autoFixLabelOverlaps(3);
++											return {result: {
++												applied: iconIds,
++												icon: cmd.icon,
++												overlapsBeforeIcon: overlapsBeforeIcon,
++												overlapsAfterFix: fixResult.remainingOverlaps
++											}};
++										})();
 +									case 'setValue':
 +										var vcell = model.getCell(cmd.id);
 +										if (vcell == null) throw new Error('cell not found: ' + cmd.id);
@@ -353,80 +488,7 @@ index e1e9dd7..477b5f7 100644
 +										model.setGeometry(ecell, egeo);
 +										return {};
 +									case 'autoFixOverlaps':
-+										var maxRounds = cmd.maxRounds || 5;
-+										var candidateOffsets = [0, 0.3, -0.3, 0.45, -0.45, 0.15, -0.15, 0.6, -0.6];
-+
-+										function countLabelOverlapsFor(edgeId)
-+										{
-+											return computeOverlaps().filter(function(o)
-+											{
-+												return o.a == edgeId + ':label' || o.b == edgeId + ':label';
-+											}).length;
-+										}
-+
-+										var roundsRun = 0;
-+										var startingOverlaps = computeOverlaps().length;
-+
-+										for (var round = 0; round < maxRounds; round++)
-+										{
-+											roundsRun = round + 1;
-+											var overlaps = computeOverlaps();
-+											var labelOverlaps = overlaps.filter(function(o)
-+											{
-+												var aid = o.a.split(':'), bid = o.b.split(':');
-+												return (aid[1] == 'label' && model.isEdge(model.getCell(aid[0]))) ||
-+													(bid[1] == 'label' && model.isEdge(model.getCell(bid[0])));
-+											});
-+
-+											if (labelOverlaps.length === 0) break;
-+
-+											var edgesToFix = {};
-+											labelOverlaps.forEach(function(o)
-+											{
-+												var aid = o.a.split(':'), bid = o.b.split(':');
-+												if (aid[1] == 'label' && model.isEdge(model.getCell(aid[0]))) edgesToFix[aid[0]] = true;
-+												if (bid[1] == 'label' && model.isEdge(model.getCell(bid[0]))) edgesToFix[bid[0]] = true;
-+											});
-+
-+											var improved = false;
-+
-+											Object.keys(edgesToFix).forEach(function(edgeId)
-+											{
-+												var ec = model.getCell(edgeId);
-+												if (ec == null) return;
-+
-+												var baselineGeo = model.getGeometry(ec).clone();
-+												var baselineCount = countLabelOverlapsFor(edgeId);
-+												if (baselineCount === 0) return;
-+
-+												var bestOffset = baselineGeo.x || 0;
-+												var bestCount = baselineCount;
-+
-+												candidateOffsets.forEach(function(offset)
-+												{
-+													var trial = baselineGeo.clone();
-+													trial.x = offset;
-+													model.setGeometry(ec, trial);
-+													var count = countLabelOverlapsFor(edgeId);
-+													if (count < bestCount)
-+													{
-+														bestCount = count;
-+														bestOffset = offset;
-+													}
-+												});
-+
-+												var finalGeo = baselineGeo.clone();
-+												finalGeo.x = bestOffset;
-+												model.setGeometry(ec, finalGeo);
-+
-+												if (bestCount < baselineCount) improved = true;
-+											});
-+
-+											if (!improved) break;
-+										}
-+
-+										var endingOverlaps = computeOverlaps().length;
-+										return {result: {roundsRun: roundsRun, startingOverlaps: startingOverlaps, remainingOverlaps: endingOverlaps}};
++										return {result: autoFixLabelOverlaps(cmd.maxRounds)};
 +									case 'exportSvg':
 +										return {result: mxUtils.getXml(graph.getSvg())};
 +									case 'exportPng':

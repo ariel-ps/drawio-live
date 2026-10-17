@@ -41,7 +41,7 @@ CAPABILITIES = {
         "action", "listActions", "eval", "listPages", "renamePage", "removePage",
         "setCurrentPage", "getFullDocument", "loadFullDocument", "saveDiagram",
         "setDocumentTitle", "insertVertex", "insertEdge", "deleteCells", "setStyle",
-        "setFullStyle", "setValue", "setGeometry", "group", "ungroup", "getSelection",
+        "setFullStyle", "setIcon", "setValue", "setGeometry", "group", "ungroup", "getSelection",
         "setSelection", "getStyle", "load", "undo", "redo", "canUndo", "canRedo",
         "exportSvg", "exportPng", "checkOverlaps", "runLayout", "setEdgeLabelPosition",
         "autoFixOverlaps", "batch", "describeGraph", "transaction",
@@ -68,10 +68,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return json.loads(raw) if raw else {}
 
     def do_GET(self):
-        if self.path == "/api/health":
-            self._send_json(200, {"ok": True, "service": "drawio-live"})
-            return
-
         if self.path.startswith("/d/"):
             name = self.path[len("/d/"):]
             self.send_response(302)
